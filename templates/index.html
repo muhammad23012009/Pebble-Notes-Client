@@ -94,7 +94,7 @@
         }
 
 	async function sendToPebble() {
-            const res = await fetch('/api/encode');
+            const res = await fetch('/api/encode?id={{ id }}');
             let link = await res.text();
             document.location = link;
         }

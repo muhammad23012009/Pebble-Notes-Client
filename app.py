@@ -13,12 +13,17 @@ return_to = ""
 @app.route('/notes/<notes>')
 def home(notes):
     global return_to
+    return_to = request.args.get("return_to")
     return render_template("index.html", id=notes)
 
 @app.route('/api/notes/push', methods=["POST"])
 def push_notes():
-    base64data = request.data.decode()
-    notes = json.loads(base64.b64decode(base64data))
+    base64data = str(request.data.decode())
+    if base64data != "":
+        notes = json.loads(base64.b64decode(base64data))
+    else:
+        notes = []
+
     ref_id = str(uuid.uuid4())
     notesdata[ref_id] = (notes, [])
 
@@ -28,15 +33,13 @@ def push_notes():
 def fetch_notes():
     global notesdata
     ref_id = str(request.args.get("id"))
-    print("reference ID is", ref_id)
     if request.method == "GET":
         print(notesdata.get(ref_id))
-        return notesdata.get(ref_id)[0]
+        return jsonify(notesdata.get(ref_id)[0])
     else:
-        print("testing before doing anything", notesdata.get(ref_id)[0])
         notes = notesdata.get(ref_id)[0]
         notes_to_push = notesdata.get(ref_id)[1]
-        current_by_index = {note[0]: note for note in notesdata[ref_id][0]}
+        current_by_index = {note[0]: note for note in notes}
 
         new_notes = request.json
         for new_note in new_notes:
@@ -61,23 +64,24 @@ def fetch_notes():
                 notes_to_push.append(note)
 
         new_notes_by_index = {note[0]: note for note in notes_to_push}
-        for note in notes:
-            enote = new_notes_by_index.get(note[0])
-            if enote:
-                if enote[2] != note[2] or enote[0] != note[0]:
-                    notes[note[0]] = enote
+        if len(notes) == 0:
+            notes = notes_to_push
+        else:
+            for note in notes:
+                enote = new_notes_by_index.get(note[0])
+                if enote:
+                    if enote[2] != note[2] or enote[0] != note[0]:
+                        notes[note[0]] = enote
 
         notesdata[ref_id] = (notes, notes_to_push)
 
-        print("New notes are", notesdata[ref_id][0])
-        print("modified notes were", notes_to_push)
         return Response(status=200)
 
 @app.route('/api/encode')
 def encode():
     ref_id = str(request.args.get("id"))
     # Encode all of the data to the format our app expects
-    data = base64.b64encode(json.dumps(notesdata[ref_id][1]).encode())
+    data = base64.b64encode(json.dumps(notesdata.get(ref_id)[1]).encode())
     notesdata[ref_id] = ()
 
     if return_to is None:
