@@ -1,0 +1,144 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Note Editor</title>
+    <style>
+        body { font-family: sans-serif; padding: 20px; }
+        .note {
+            border: 1px solid #ccc;
+            padding: 10px;
+            margin-bottom: 10px;
+            background: #f9f9f9;
+            cursor: grab;
+        }
+        .note textarea {
+            width: 100%;
+            height: 60px;
+        }
+        #notes-container {
+            max-width: 600px;
+            margin: auto;
+        }
+        button {
+            padding: 10px 20px;
+            font-size: 16px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Edit Notes</h1>
+    <div id="notes-container"></div>
+    <button onclick="addNote()">Add new note</button>
+    <button onclick="saveNotes()">Save Changes</button>
+    <button onclick="sendToPebble()">Send to Pebble</button>
+
+    <script>
+        let notes = [];
+
+        async function loadNotes() {
+            const res = await fetch('/api/notes/fetch?id={{ id }}');
+            notes = await res.json();
+            renderNotes();
+        }
+
+        function renderNotes() {
+            const container = document.getElementById('notes-container');
+            container.innerHTML = '';
+
+            notes.forEach((note, index) => {
+                const div = document.createElement('div');
+                div.className = 'note';
+                div.draggable = true;
+                div.dataset.index = index;
+
+                div.ondragstart = e => {
+                    e.dataTransfer.setData('text/plain', index);
+                };
+
+                div.ondragover = e => e.preventDefault();
+
+                div.ondrop = e => {
+                    e.preventDefault();
+                    const fromIndex = parseInt(e.dataTransfer.getData('text/plain'));
+                    const toIndex = index;
+                    const movedNote = notes.splice(fromIndex, 1)[0];
+                    notes.splice(toIndex, 0, movedNote);
+                    renderNotes();
+                };
+
+                const textarea = document.createElement('textarea');
+                textarea.value = note[2]; // Text at index 2
+                textarea.oninput = e => note[2] = e.target.value;
+
+                div.appendChild(textarea);
+                container.appendChild(div);
+            });
+        }
+
+        async function saveNotes() {
+            // Reassign the index in each note based on order
+            notes.forEach((note, i) => note[0] = i);
+
+            const res = await fetch('/api/notes/fetch?id={{ id }}', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(notes)
+            });
+
+            if (res.ok) {
+                alert('Notes saved!');
+            } else {
+                alert('Failed to save notes.');
+            }
+        }
+
+	async function sendToPebble() {
+            const res = await fetch('/api/encode');
+            let link = await res.text();
+            document.location = link;
+        }
+
+        async function addNote() {
+            if (document.getElementById('note-input-container')) return;
+
+            const container = document.getElementById('notes-container');
+
+            const div = document.createElement('div');
+            div.id = 'note-input-container';
+            div.style.marginBottom = '1em';
+
+            div.innerHTML = `
+                <textarea id="note-input" placeholder="Type your note..." rows="2" style="width: 100%; margin-bottom: 0.5em;"></textarea>
+                <br>
+                <button onclick="submitNoteInput()">Add</button>
+                <button onclick="cancelNoteInput()">Cancel</button>
+            `;
+
+            // Insert at the top
+            container.prepend(div);
+        }
+
+function submitNoteInput() {
+    const text = document.getElementById('note-input').value.trim();
+    if (!text) {
+        alert("Note cannot be empty.");
+        return;
+    }
+
+    const newNote = [notes.length, "metaNew", text];
+    notes.push(newNote);
+
+    cancelNoteInput(); // Clean up the temp input
+    renderNotes();     // Refresh notes
+}
+
+function cancelNoteInput() {
+    const inputContainer = document.getElementById('note-input-container');
+    if (inputContainer) inputContainer.remove();
+}
+
+        loadNotes();
+    </script>
+</body>
+</html>
